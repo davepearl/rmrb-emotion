@@ -1,3 +1,4 @@
+# .github/workflows/run-crawl.yml
 name: Run News Crawler
 
 on:
@@ -6,13 +7,13 @@ on:
   workflow_dispatch:  # 允许手动触发
   push:
     branches: [main]
-    paths: ['crawl.py', 'model.py']
+    paths: ['crawler.py', 'model.py']
 
 jobs:
   crawl:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # 需要写权限来提交文件
+      contents: write  # 需要写权限
 
     steps:
     - name: Checkout code
@@ -63,37 +64,21 @@ jobs:
       run: |
         python crawl.py
 
-    - name: Check if file changed
-      id: check_changes
+    - name: Commit and push news.pkl
+      if: always()  # 即使爬虫失败也尝试提交
       run: |
-        if [ -f news.pkl ]; then
-          echo "File exists, checking for changes..."
-          # 检查文件是否有实际变化（简单方法：检查大小）
-          file_size=$(stat -c%s news.pkl)
-          echo "New file size: $file_size bytes"
-          echo "changed=true" >> $GITHUB_OUTPUT
-        else
-          echo "No news.pkl generated"
-          echo "changed=false" >> $GITHUB_OUTPUT
-        fi
-
-    - name: Commit and push if changed
-      if: steps.check_changes.outputs.changed == 'true'
-      run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
+        git config --global user.name "GitHub Action"
+        git config --global user.email "action@github.com"
+        
+        # 先拉取最新代码，解决冲突（使用 rebase 策略）
+        git pull origin main --rebase --autostash
         
         # 添加并提交文件
         git add news.pkl
+        git commit -m "🤖 Auto-update news.pkl $(date '+%Y-%m-%d %H:%M:%S')" || echo "No changes to commit"
         
-        # 检查是否有更改需要提交
-        if git diff --staged --quiet; then
-          echo "No changes to commit"
-        else
-          git commit -m "🤖 Auto-update news.pkl from GitHub Actions"
-          git push
-          echo "✅ Successfully updated news.pkl in repository"
-        fi
+        # 推送更改
+        git push origin main
 
     - name: Upload results as artifact
       uses: actions/upload-artifact@v4
