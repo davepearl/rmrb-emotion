@@ -3,7 +3,7 @@ from pathlib import Path
 from transformers import pipeline
 import threading
 
-_CKPT = Path(r"ckpts")   # 1. 原始字符串用正斜杠
+_CKPT = Path("ckpts")   # 1. 原始字符串用正斜杠
 _LOCK = threading.Lock()
 _PIPELINE = None
 
