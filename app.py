@@ -1,51 +1,59 @@
 import pandas as pd
-import matplotlib.pyplot as plt
-from wordcloud import WordCloud
 import streamlit as st
 
 st.set_page_config(page_title="澎湃新闻情绪速览", layout="wide")
 st.title("📰 澎湃新闻频道情绪速览")
-st.caption("🔴负面  🟢正面/中性")
 
-df = pd.read_pickle("news.pkl")
+# 尝试加载数据
+try:
+    df = pd.read_pickle("news.pkl")
+    st.success(f"✅ 成功加载 {len(df)} 条新闻")
+except FileNotFoundError:
+    st.error("❌ 未找到 news.pkl 文件，请先运行爬虫")
+    st.stop()
 
-keyword = st.text_input("标题关键词过滤（留空显示全部）", "")
+# 关键词搜索
+keyword = st.text_input("搜索新闻标题（留空显示全部）", "")
+
+# 情感筛选
+sentiment_options = ["全部", "正面", "负面"]
+selected_sentiment = st.selectbox("筛选情感", sentiment_options)
+
+# 应用筛选
+filtered_df = df.copy()
 if keyword:
-    df = df[df["title"].str.contains(keyword, na=False)]
+    filtered_df = filtered_df[filtered_df["title"].str.contains(keyword, na=False)]
+if selected_sentiment != "全部":
+    # 适配不同的标签格式
+    if selected_sentiment == "正面":
+        filtered_df = filtered_df[filtered_df["label"].str.upper().str.contains("POSITIVE|正面")]
+    else:
+        filtered_df = filtered_df[filtered_df["label"].str.upper().str.contains("NEGATIVE|负面")]
 
-for _, row in df.iterrows():
-    emoji = "🔴" if row.label == "NEGATIVE" else "🟢"
+st.write(f"📊 显示 {len(filtered_df)} 条新闻")
+
+# 显示新闻列表
+for idx, row in filtered_df.iterrows():
+    # 确定表情和标签显示
+    if row.label in ['NEGATIVE', '负面', '负向'] or 'NEGATIVE' in str(row.label).upper():
+        emoji = "🔴"
+        label_text = "负面"
+    else:
+        emoji = "🟢"
+        label_text = "正面"
+
+    # 显示新闻
     with st.expander(f"{emoji} {row.title}"):
-        st.caption(f"{row.pub_time}  |  置信度：{row.score:.2f}")
-        st.write(row.content[:400] + "…")
+        st.write(f"**情感:** {label_text}")
+        st.write(f"**时间:** {row.pub_time}")
+        st.write(f"**置信度:** {row.score:.2%}")
 
-# ===== 新增：一键情感词云 =====
-def generate_wordcloud(df: pd.DataFrame):
-    st.subheader("📊 情感词云")
-    if st.button("一键生成词云"):
-        # 分正面/负面
-        pos_text = " ".join(df[df["label"] == "POSITIVE"]["content"])
-        neg_text = " ".join(df[df["label"] == "NEGATIVE"]["content"])
+        # 显示内容（限制长度）
+        content = str(row.content)
+        if len(content) > 500:
+            content = content[:500] + "..."
+        st.write(f"**内容:** {content}")
 
-        # 生成词云
-        pos_cloud = WordCloud(width=400, height=300, background_color="white", colormap="Greens").generate(pos_text)
-        neg_cloud = WordCloud(width=400, height=300, background_color="white", colormap="Reds").generate(neg_text)
-
-        # 并排展示
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write("正面词云")
-            fig1, ax1 = plt.subplots(figsize=(4, 3))
-            ax1.imshow(pos_cloud, interpolation="bilinear")
-            ax1.axis("off")
-            st.pyplot(fig1)
-
-        with col2:
-            st.write("负面词云")
-            fig2, ax2 = plt.subplots(figsize=(4, 3))
-            ax2.imshow(neg_cloud, interpolation="bilinear")
-            ax2.axis("off")
-            st.pyplot(fig2)
-
-# ===== 调用 =====
-generate_wordcloud(df)
+        # 显示原文链接（如果有）
+        if 'url' in row:
+            st.write(f"**原文链接:** [{row.url}]({row.url})")
