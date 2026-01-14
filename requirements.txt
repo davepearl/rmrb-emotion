@@ -4,3 +4,4 @@ beautifulsoup4
 transformers
 pandas
 torch
+webdriver-manager
