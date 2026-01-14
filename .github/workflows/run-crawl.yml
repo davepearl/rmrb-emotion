@@ -6,11 +6,12 @@ on:
   workflow_dispatch:  # 允许手动触发
   push:
     branches: [main]
-    paths: ['crawler.py', 'model.py']
+    paths: ['crawl.py', 'model.py']  # 确保这里和实际文件名一致
 
 jobs:
   crawl:
     runs-on: ubuntu-latest
+    timeout-minutes: 15  # 整个作业的超时时间
 
     steps:
     - name: Checkout code
@@ -51,20 +52,33 @@ jobs:
       run: |
         pip install -r requirements.txt
 
-    - name: Set HF mirror for China
-      run: echo "HF_ENDPOINT=https://hf-mirror.com" >> $GITHUB_ENV
+    - name: Set environment variables
+      run: |
+        echo "HF_ENDPOINT=https://hf-mirror.com" >> $GITHUB_ENV
+        echo "GITHUB_ACTIONS=true" >> $GITHUB_ENV  # 让爬虫代码知道在Actions中运行
 
     - name: Run crawler
-      timeout-minutes: 10  # 设置超时，防止无限运行
+      timeout-minutes: 10
       run: |
-        python crawler.py
+        python crawl.py  # 确保这里文件名正确
+
+    - name: Check if results exist
+      run: |
+        if [ -f news.pkl ]; then
+          echo "✅ 爬虫运行成功，生成 news.pkl"
+          # 如果生成CSV，可以添加检查
+          # if [ -f news.csv ]; then
+          #   echo "✅ 同时生成 news.csv"
+          # fi
+        else
+          echo "❌ 未找到 news.pkl 文件"
+          exit 1
+        fi
 
     - name: Upload results
       uses: actions/upload-artifact@v4
-      if: always()  # 即使失败也上传结果
+      if: success()  # 只有成功时才上传
       with:
         name: news-data
-        path: |
-          news.pkl
-          news.csv
+        path: news.pkl
         retention-days: 7
