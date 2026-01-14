@@ -3,7 +3,7 @@ from pathlib import Path
 from transformers import pipeline
 import threading
 
-_CKPT = Path(r"D:\Desktop\learn_pytorch/BERT_sentiment_analysis/ckpts")   # 1. 原始字符串用正斜杠
+_CKPT = Path(r"ckpts")   # 1. 原始字符串用正斜杠
 _LOCK = threading.Lock()
 _PIPELINE = None
 
