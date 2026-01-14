@@ -6,16 +6,19 @@ on:
   workflow_dispatch:  # 允许手动触发
   push:
     branches: [main]
-    paths: ['crawl.py', 'model.py']  # 确保这里和实际文件名一致
+    paths: ['crawl.py', 'model.py']
 
 jobs:
   crawl:
     runs-on: ubuntu-latest
-    timeout-minutes: 15  # 整个作业的超时时间
+    permissions:
+      contents: write  # 需要写权限来提交文件
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -52,32 +55,49 @@ jobs:
       run: |
         pip install -r requirements.txt
 
-    - name: Set environment variables
-      run: |
-        echo "HF_ENDPOINT=https://hf-mirror.com" >> $GITHUB_ENV
-        echo "GITHUB_ACTIONS=true" >> $GITHUB_ENV  # 让爬虫代码知道在Actions中运行
+    - name: Set HF mirror for China
+      run: echo "HF_ENDPOINT=https://hf-mirror.com" >> $GITHUB_ENV
 
     - name: Run crawler
       timeout-minutes: 10
       run: |
-        python crawl.py  # 确保这里文件名正确
+        python crawl.py
 
-    - name: Check if results exist
+    - name: Check if file changed
+      id: check_changes
       run: |
         if [ -f news.pkl ]; then
-          echo "✅ 爬虫运行成功，生成 news.pkl"
-          # 如果生成CSV，可以添加检查
-          # if [ -f news.csv ]; then
-          #   echo "✅ 同时生成 news.csv"
-          # fi
+          echo "File exists, checking for changes..."
+          # 检查文件是否有实际变化（简单方法：检查大小）
+          file_size=$(stat -c%s news.pkl)
+          echo "New file size: $file_size bytes"
+          echo "changed=true" >> $GITHUB_OUTPUT
         else
-          echo "❌ 未找到 news.pkl 文件"
-          exit 1
+          echo "No news.pkl generated"
+          echo "changed=false" >> $GITHUB_OUTPUT
         fi
 
-    - name: Upload results
+    - name: Commit and push if changed
+      if: steps.check_changes.outputs.changed == 'true'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        # 添加并提交文件
+        git add news.pkl
+        
+        # 检查是否有更改需要提交
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "🤖 Auto-update news.pkl from GitHub Actions"
+          git push
+          echo "✅ Successfully updated news.pkl in repository"
+        fi
+
+    - name: Upload results as artifact
       uses: actions/upload-artifact@v4
-      if: success()  # 只有成功时才上传
+      if: always()
       with:
         name: news-data
         path: news.pkl
