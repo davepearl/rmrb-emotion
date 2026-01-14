@@ -1,9 +1,9 @@
-# model.py
-from pathlib import Path
 from transformers import pipeline
 import threading
 
-_CKPT = Path("ckpts")   # 1. 原始字符串用正斜杠
+# 1. 从 HuggingFace Hub 加载（不再用本地文件夹）
+_CKPT = "davepearl/tinybert-zh-sentiment"   # 你的 HF 仓库名
+
 _LOCK = threading.Lock()
 _PIPELINE = None
 
@@ -14,8 +14,8 @@ def _load_model() -> pipeline:
             if _PIPELINE is None:
                 _PIPELINE = pipeline(
                     "text-classification",
-                    model=_CKPT.as_posix(),      # 2. 关键：转成正斜杠
-                    tokenizer=_CKPT.as_posix(),
+                    model=_CKPT,          # Hub 仓库名
+                    tokenizer=_CKPT,
                     device=-1,
                     top_k=None
                 )
@@ -24,9 +24,7 @@ def _load_model() -> pipeline:
 def predict_sentiment(text: str) -> tuple[str, float]:
     pipe = _load_model()
     result = pipe(text[:512], top_k=None)[0]   # 一定 list
-    # 统一取字段
     if isinstance(result, dict):
-        label, score = result["label"], result["score"]
-    else:                       # 旧版只给标签
-        label, score = result, 1.0
-    return str(label), float(score)
+        return result["label"], float(result["score"])
+    # 旧版只返回标签
+    return str(result), 1.0
